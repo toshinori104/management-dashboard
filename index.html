@@ -1,5 +1,4 @@
-@'
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
@@ -8,7 +7,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/index.tsx"></script>
+    <!-- ここが重要 -->
+    <script type="module" src="./src/index.tsx"></script>
   </body>
 </html>
-'@ | Out-File -FilePath .\index.html -Encoding UTF8
