@@ -1,0 +1,8 @@
+# Node.js
+node_modules/
+dist/
+.env
+
+# 一時ファイルやエディタバックアップ
+*.txt
+*.log
