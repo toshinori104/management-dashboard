@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>業務一元化デモ v3.3+（図面タブ統合・工程自動遷移・採番・マスター編集・PDFモック）</title>
+  <style>
+    :root {
+      --bg: #f7fafd;
+      --card: #ffffff;
+      --line: #b9c3d0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #217be3;
+      --pill: #eef2ff;
+      --bad: #fee2e2;
+      --soon: #fff7ed;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: "Yu Gothic", "Meiryo", system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+    header { position: sticky; top:0; z-index:10; background: var(--card); border-bottom: 1px solid var(--line); }
+    .container { max-width: 1250px; margin: 0 auto; padding: 14px; }
+    h1 { margin: 0 0 8px 0; font-size: 20px; }
+    .controls { display:flex; flex-wrap: wrap; gap:8px; align-items: center; margin: 8px 0 12px; }
+    .controls > * { font-size: 14px; }
+    select, input[type="text"], input[type="date"], button { padding: 6px 10px; border:1px solid var(--line); background: #fff; border-radius: 8px; }
+    button.primary { background: var(--primary); color: #fff; border-color: var(--primary); cursor:pointer; }
+    button.ghost { background: #fff; border-color: var(--line); color: var(--text); cursor:pointer; }
+    .tabs { display:flex; flex-wrap:wrap; gap:8px; margin: 8px 0; }
+    .tab { padding: 8px 12px; border:1px solid var(--line); border-bottom-width:2px; border-radius: 10px; background:#fff; cursor:pointer; }
+    .tab.active { border-color: var(--primary); color: var(--primary); font-weight: 700; }
+    main { padding:16px; }
+    .card { background: var(--card); border:1px solid var(--line); border-radius: 12px; overflow:hidden; }
+    table { width:100%; border-collapse: collapse; font-size: 13px; min-width: 1280px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+    th { background:#f1f5f9; position: sticky; top: 0; z-index: 2; user-select: none; }
+    tbody tr:hover { background: #f8fafc; cursor: pointer; }
+    .muted { color: var(--muted); }
+    .pill { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--pill); }
+    .status-図面 { background:#e0f2fe; color:#075985; }
+    .status-製作 { background:#e2e8f0; color:#0f172a; }
+    .status-検査 { background:#fef9c3; color:#854d0e; }
+    .status-出荷 { background:#dcfce7; color:#166534; }
+    .status-着 { background:#ede9fe; color:#5b21b6; }
+    .status-請求 { background:#ffe4e6; color:#9f1239; }
+    .kanban { display:grid; grid-template-columns: repeat(6, 1fr); gap:12px; }
+    .col { background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; min-height: 240px; }
+    .col h3 { margin:0 0 8px; font-size: 14px; }
+    .card-k { background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px; margin:8px 0; box-shadow: 0 1px 0 #e2e8f0; }
+    .card-k .title { font-weight: 700; }
+    .dropzone { min-height: 180px; }
+    .col.over { outline: 2px dashed var(--primary); outline-offset: 4px; }
+    .week { display:grid; grid-template-columns: 260px 1fr; gap:8px; border-bottom:1px dashed var(--line); padding: 8px 0; }
+    .bar { height: 10px; border-radius: 999px; background:#dbeafe; }
+    .right { text-align:right; }
+    footer { padding: 4px 16px 16px; color: var(--muted); font-size: 12px; }
+    dialog { border:none; border-radius: 12px; width: 820px; max-width: 95vw; }
+    dialog::backdrop { background: rgba(0,0,0,0.3); }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+    .grid label { font-size: 12px; color: var(--muted); }
+    .row { display:flex; gap:8px; align-items: center; }
+    .flex { display:flex; gap:8px; align-items:center; }
+    .spacer { flex: 1 1 auto; }
+    .hidden { display:none !important; }
+    .nowrap { white-space: nowrap; }
+    .warnings { background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 12px; margin:8px; }
+    .due-bad { background: var(--bad); }
+    .due-soon { background: var(--soon); }
+    .settings { margin-left: 8px; border:1px solid var(--line); border-radius:10px; padding:4px 8px; display:flex; align-items:center; gap:6px; }
+    .filters { display:flex; flex-wrap:wrap; gap:8px; margin: 8px 0; }
+    .role { margin-left: 8px; }
+    .section-head { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--line); background:#f8fafc; }
+    .section-body { padding:10px 14px; }
+    .subtle { font-size:12px; color:var(--muted); }
+    .toast { position:fixed; bottom:16px; right:16px; background:#111; color:#fff; padding:10px 12px; border-radius:10px; opacity:0.92; }
+
+    /* 固定列（工番） */
+    #jobsTable th:first-child, #jobsTable td:first-child {
+      position: sticky;
+      left: 0;
+      background: #fff;
+      z-index: 3;
+    }
+    #jobsTable th:first-child { box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1); }
+
+    /* Masterビューの見切れ＆重なり対策 */
+    #view-masters .section-body { overflow-x: auto; }
+
+    /* 4つのマスター枠が狭い時に収まるよう最小幅を確保 */
+    #view-masters .section-body .row > div { min-width: 340px; padding-right: 6px; }
+
+    /* 各行（チェック・コード・名称・ボタン）を折返し可に */
+    #view-masters .section-body .row { flex-wrap: wrap; }
+
+    /* コード/名称の幅を安定化 */
+    #view-masters .m-code { flex: 0 0 90px !important; max-width: 120px; }
+    #view-masters .m-name { flex: 1 1 280px !important; min-width: 220px; }
+
+    /* ボタンが潰れないよう固定 */
+    #view-masters .section-body .row button { flex: 0 0 auto; white-space: nowrap; }
+
+    /* ソート矢印 */
+    .sort-indicator { margin-left:4px; font-size:10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>業務一元化デモ v3.3+（図面タブ統合・工程自動遷移・採番・マスター編集・PDFモック）</h1>
+      <div class="controls">
+        <button class="primary" id="btnAdd">＋ 新規追加</button>
+        <button class="ghost" id="btnSave">保存</button>
+        <button class="ghost" id="btnExportCsv">CSV出力</button>
+        <button class="ghost" id="btnExportJson">JSON出力</button>
+        <button class="ghost" id="btnExportInvoice">請求CSV出力</button>
+        <label class="ghost" style="padding:0 8px; border: none;">
+          JSON取込 <input id="jsonFile" type="file" accept="application/json" />
+        </label>
+        <label class="ghost" style="padding:0 8px; border: none;">
+          CSV取込（案件） <input id="jobsCsv" type="file" accept=".csv" />
+        </label>
+        <label class="ghost" style="padding:0 8px; border: none;">
+          レーザーZip取込（モック） <input id="laserZip" type="file" accept=".zip" />
+        </label>
+        <button class="ghost" id="btnDownloadCsvTemplate">CSVテンプレ</button>
+        <span class="spacer"></span>
+        <div class="settings">
+          <label>納品書番号：</label>
+          <select id="invoiceMode">
+            <option value="manual">手入力</option>
+            <option value="auto-seq">連番(YYMM-####)</option>
+            <option value="by-customer-seq">客先別(DK-YYMM-####)</option>
+          </select>
+          <input id="invoiceSeqStart" type="text" placeholder="開始番号（例: 0001）" style="width:130px;">
+          <label class="ghost" style="padding:0 8px; border:none;">休日CSV <input id="holidayCsv" type="file" accept=".csv" /></label>
+          <label class="role">
+            ロール：
+            <select id="roleSelect">
+              <option value="admin">社長</option>
+              <option value="officeA">事務A</option>
+              <option value="officeB">事務B</option>
+              <option value="factory">製造</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="filters">
+        <input id="filterQuery" type="text" placeholder="フリーワード（工番/工事名/品名）" style="min-width:260px;">
+        <select id="filterCustomer"><option value="">客先（すべて）</option></select>
+        <select id="filterFactory"><option value="">製作工場（すべて）</option></select>
+        <select id="filterStatus"><option value="">状況（すべて）</option></select>
+        <button class="ghost" id="btnClearFilters">フィルタ解除</button>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="list">一覧</div>
+        <div class="tab" data-tab="kanban">カンバン</div>
+        <div class="tab" data-tab="weekly">週次</div>
+        <div class="tab" data-tab="drawings">図面</div>
+        <div class="tab" data-tab="masters">マスター</div>
+        <div class="tab" data-tab="logs">ログ</div>
+        <div class="tab" data-tab="docs">PDF</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="warnings" class="warnings hidden"></div>
+
+    <section id="view-list" class="card">
+      <div style="overflow:auto; max-height: 58vh;">
+        <table id="jobsTable">
+          <thead>
+            <tr>
+              <th data-key="jobNo">工番 <span class="sort-indicator"></span></th>
+              <th data-key="customer">客先 <span class="sort-indicator"></span></th>
+              <th data-key="projectName">工事名 <span class="sort-indicator"></span></th>
+              <th data-key="itemName">品名 <span class="sort-indicator"></span></th>
+              <th data-key="qty" class="right">台数 <span class="sort-indicator"></span></th>
+              <th data-key="factory">製作工場 <span class="sort-indicator"></span></th>
+              <th data-key="dueDate">納期 <span class="sort-indicator"></span></th>
+              <th data-key="status">状況 <span class="sort-indicator"></span></th>
+              <th data-key="inspection">検査 <span class="sort-indicator"></span></th>
+              <th data-key="shipDate">出荷日 <span class="sort-indicator"></span></th>
+              <th data-key="arriveDate">着日 <span class="sort-indicator"></span></th>
+              <th data-key="shipMethod">出荷手段 <span class="sort-indicator"></span></th>
+              <th data-key="deliveryTo">納品先 <span class="sort-indicator"></span></th>
+              <th data-key="invoiceOk">請求可 <span class="sort-indicator"></span></th>
+              <th data-key="invoiceNo">納品書番号 <span class="sort-indicator"></span></th>
+              <th data-key="notes">備考 <span class="sort-indicator"></span></th>
+              <th data-key="remaining" class="right">残日</th>
+              <th data-key="workdays" class="right">稼働日</th>
+              <th data-key="autoFlow">自動遷移</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-kanban" class="hidden">
+      <div class="kanban" id="kanban"></div>
+    </section>
+
+    <section id="view-weekly" class="hidden card" style="padding:12px;">
+      <div id="weekly"></div>
+    </section>
+
+    <!-- 図面ビュー -->
+    <section id="view-drawings" class="hidden card">
+      <div class="section-head">
+        <strong>図面管理（端末ローカル保存モック）</strong>
+        <span class="spacer"></span>
+        <label>ファイル <input id="dwgFiles" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.gif"></label>
+        <select id="dwgJob"><option value="">工番選択</option></select>
+        <input id="dwgProject" type="text" placeholder="工事名">
+        <input id="dwgDeliveryTo" type="text" placeholder="納品先">
+        <input id="dwgItem" type="text" placeholder="品名">
+        <input id="dwgNumber" type="text" placeholder="図番">
+        <input id="dwgDate" type="date" placeholder="作図日付" value="">
+        <input id="dwgApprove" type="text" placeholder="承認">
+        <input id="dwgCheck" type="text" placeholder="照査">
+        <input id="dwgDesign" type="text" placeholder="設計">
+        <input id="dwgAuthor" type="text" placeholder="作成者">
+        <button id="btnDwgUpload" class="primary">登録</button>
+      </div>
+      <div class="section-body">
+        <div class="controls">
+          <input id="qDwgJob"  type="text" placeholder="工番検索">
+          <input id="qDwgCust" type="text" placeholder="客先検索">
+          <input id="qDwgProject" type="text" placeholder="工事名検索">
+          <input id="qDwgDeliveryTo" type="text" placeholder="納品先検索">
+          <input id="qDwgItem" type="text" placeholder="品名検索">
+          <input id="qDwgNumber" type="text" placeholder="図番検索">
+          <input id="qDwgApprove" type="text" placeholder="承認検索">
+          <input id="qDwgCheck" type="text" placeholder="照査検索">
+          <input id="qDwgDesign" type="text" placeholder="設計検索">
+          <input id="qDwgAuthor" type="text" placeholder="作成者検索">
+          <input id="qDwgFile" type="text" placeholder="ファイル名検索">
+          <button id="btnDwgClear" class="ghost">クリア</button>
+        </div>
+        <table id="dwgTable">
+          <thead>
+            <tr>
+              <th>プレビュー</th>
+              <th>納品先</th>
+              <th>工事名</th>
+              <th>工番</th>
+              <th>図番</th>
+              <th>作図日付</th>
+              <th>承認</th>
+              <th>照査</th>
+              <th>設計</th>
+              <th>作成者</th>
+              <th>ファイル名</th>
+              <th>登録者/日時</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-masters" class="hidden card">
+      <div class="section-head">
+        <strong>マスター編集</strong><span class="subtle">（CSV入出力可）</span>
+        <span class="spacer"></span>
+        <button id="btnExportMasters" class="ghost">エクスポート</button>
+        <label class="ghost" style="padding:0 8px; border:none;">インポート <input id="mastersCsv" type="file" accept=".csv" /></label>
+      </div>
+      <div class="section-body">
+        <div class="row">
+          <div style="flex:1; min-width:180px;">
+            <label>客先</label>
+            <div id="master-customers"></div>
+          </div>
+          <div style="flex:1; min-width:180px;">
+            <label>製作工場</label>
+            <div id="master-factories"></div>
+          </div>
+          <div style="flex:1; min-width:180px;">
+            <label>出荷手段</label>
+            <div id="master-ship"></div>
+          </div>
+          <div style="flex:1; min-width:180px;">
+            <label>工程</label>
+            <div id="master-statuses"></div>
+          </div>
+        </div>
+        <div style="margin-top:16px; border-top:1px solid var(--line); padding-top:8px;">
+          <strong>検査テンプレート（CSVで管理）</strong>
+          <div style="margin:6px 0; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <label class="ghost" style="padding:0 8px; border:none;">取り込み <input id="inspectionTemplatesCsv" type="file" accept=".csv" /></label>
+            <button class="ghost" id="btnExportInspectionTemplates">エクスポート</button>
+          </div>
+          <div id="inspection-templates-list" style="max-width:100%; overflow:auto;">
+            <!-- リスト表示 -->
+          </div>
+          <div class="subtle" style="margin-top:8px;">CSVは「テンプレート名, 項目1;項目2;項目3」の形式。複数項目はセミコロン区切り。</div>
+        </div>
+        <div class="subtle" style="margin-top:8px;">行を追加/削除、ドラッグで並び替え。無効化は行頭のチェックを外します。</div>
+      </div>
+    </section>
+
+    <section id="view-logs" class="hidden card">
+      <div class="section-head"><strong>操作ログ</strong></div>
+      <div class="section-body">
+        <div id="logs"></div>
+      </div>
+    </section>
+
+    <section id="view-docs" class="hidden card">
+      <div class="section-head"><strong>PDFモック</strong><span class="subtle">（請求/納品ひな形プレビュー）</span>
+        <span class="spacer"></span>
+        <button id="btnGenPdf" class="ghost">PDF生成（モック）</button>
+      </div>
+      <div class="section-body">
+        <iframe id="pdfFrame" style="width:100%; height:60vh; border:1px solid var(--line); background:#fff;"></iframe>
+      </div>
+    </section>
+  </main>
+
+  <footer class="container">
+    ロール切替・工程自動遷移・採番・マスター編集・検査テンプレ・レーザーZipモック・PDFプレビュー・図面管理を体験できます（ローカル保存）。  
+    「自動遷移」は状態/日付/検査/備考フラグに従って内部的にステータスが切り替わる仕組みのON/OFF表示です。
+  </footer>
+
+  <dialog id="editDialog">
+    <form id="editForm">
+      <div style="padding: 10px 14px 0;" class="row">
+        <h3 id="dlgTitle" style="margin:0;">編集</h3>
+        <span class="spacer"></span>
+        <button type="button" id="btnDlgCancel" class="ghost">キャンセル</button>
+        <button type="submit" id="btnDlgSave" class="primary">保存</button>
+      </div>
+      <div style="padding: 10px 14px 16px;">
+        <div class="grid">
+          <div>
+            <label>工番</label>
+            <input name="jobNo" type="text" style="width:100%" required />
+          </div>
+          <div>
+            <label>客先</label>
+            <select name="customer" style="width:100%"></select>
+          </div>
+          <div>
+            <label>工事名</label>
+            <input name="projectName" type="text" style="width:100%" />
+          </div>
+          <div>
+            <label>品名</label>
+            <input name="itemName" type="text" style="width:100%" />
+          </div>
+          <div>
+            <label>台数</label>
+            <input name="qty" type="number" min="1" step="1" value="1" style="width:100%" />
+          </div>
+          <div>
+            <label>製作工場</label>
+            <select name="factory" style="width:100%"></select>
+          </div>
+          <div>
+            <label>納期</label>
+            <input name="dueDate" type="date" style="width:100%" />
+          </div>
+          <div>
+            <label>状況</label>
+            <select name="status" style="width:100%"></select>
+          </div>
+          <div>
+            <label>検査</label>
+            <select name="inspection" style="width:100%"></select>
+          </div>
+          <div>
+            <label>出荷日</label>
+            <input name="shipDate" type="date" style="width:100%" />
+          </div>
+          <div>
+            <label>着日</label>
+            <input name="arriveDate" type="date" style="width:100%" />
+          </div>
+          <div>
+            <label>出荷手段</label>
+            <select name="shipMethod" style="width:100%"></select>
+          </div>
+          <div>
+            <label>納品先</label>
+            <input name="deliveryTo" type="text" style="width:100%" />
+          </div>
+          <div>
+            <label>請求可</label>
+            <select name="invoiceOk" style="width:100%">
+              <option value="">―</option>
+              <option value="可">可</option>
+              <option value="不可">不可</option>
+            </select>
+          </div>
+          <div>
+            <label>納品書番号</label>
+            <input name="invoiceNo" type="text" style="width:100%" />
+          </div>
+          <div>
+            <label>自動遷移</label>
+            <select name="autoFlow" style="width:100%">
+              <option value="on">ON</option>
+              <option value="off">OFF</option>
+            </select>
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <label>備考</label>
+            <input name="notes" type="text" style="width:100%" />
+          </div>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script>
+    // ---- Storage keys
+    const STORAGE_KEY  = "tm_unified_jobs_v3_3";
+    const SETTINGS_KEY = "tm_unified_settings_v3_3";
+    const HOLIDAYS_KEY = "tm_unified_holidays_v3_3";
+    const MASTERS_KEY  = "tm_unified_masters_v3_3";
+    const LOGS_KEY     = "tm_unified_logs_v3_3";
+    const DWG_KEY      = "tm_unified_drawings_v3_3";
+    const INSPECTION_TEMPLATES_KEY = "tm_unified_inspection_templates_v3_3";
+
+    // ---- Persisted data
+    let jobs      = loadJobs();
+    let settings  = loadSettings() || { invoiceMode:"by-customer-seq", invoiceSeqStart:"0001", invoiceSeqByCustomer:{}, autoFlowDefault:"on", role:"admin" };
+    let holidays  = loadHolidays();
+    let logs      = loadLogs();
+    let dwgs      = loadDwgs();
+    let inspectionTemplates = loadInspectionTemplates() || [];
+
+    // ---- Masters (editable)
+    let masters = loadMasters() || {
+      customers: [
+        {code:"DK", name:"大協", active:true},
+        {code:"DT", name:"DT", active:true},
+        {code:"NG", name:"中川", active:true},
+        {code:"OT", name:"その他", active:true},
+      ],
+      factories: [
+        {code:"H1", name:"本社工場", active:true},
+        {code:"H2", name:"第2工場", active:true},
+        {code:"PA", name:"協力工場A", active:true},
+      ],
+      shipmentMethods: [
+        {code:"T2", name:"自社2t", active:true},
+        {code:"T4", name:"自社4t", active:true},
+        {code:"10U", name:"10tユニック", active:true},
+        {code:"4U", name:"4tユニック", active:true},
+        {code:"10", name:"10t", active:true},
+        {code:"TR", name:"トレーラー", active:true},
+        {code:"YO", name:"庸車", active:true},
+        {code:"DL", name:"宅配", active:true},
+        {code:"PU", name:"引取", active:true},
+      ],
+      statuses: [
+        {code:"D", name:"図面", active:true},
+        {code:"M", name:"製作", active:true},
+        {code:"I", name:"検査", active:true},
+        {code:"S", name:"出荷", active:true},
+        {code:"A", name:"着", active:true},
+        {code:"B", name:"請求", active:true},
+      ],
+      inspections: [
+        {code:"N", name:"未", active:true},
+        {code:"O", name:"OK", active:true},
+        {code:"H", name:"保留", active:true},
+      ]
+    };
+
+    // ---- Sort state
+    let sortState = { key: null, dir: 1 }; // 1=asc, -1=desc
+
+    // ---- Constants
+    const INVOICE_AUTO_ON_ARRIVE = true;
+    const DUE_SOON_DAYS = 3;
+
+    // ---- Storage helpers
+    function saveJobs(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs)); }
+    function loadJobs(){ const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : seed(); }
+    function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+    function loadSettings(){ const s=localStorage.getItem(SETTINGS_KEY); return s?JSON.parse(s):null; }
+    function saveHolidays(){ localStorage.setItem(HOLIDAYS_KEY, JSON.stringify(Array.from(holidays))); }
+    function loadHolidays(){ const s=localStorage.getItem(HOLIDAYS_KEY); return s?new Set(JSON.parse(s)):new Set(); }
+    function saveMasters(){ localStorage.setItem(MASTERS_KEY, JSON.stringify(masters)); }
+    function loadMasters(){ const s=localStorage.getItem(MASTERS_KEY); return s?JSON.parse(s):null; }
+    function saveLogs(){ localStorage.setItem(LOGS_KEY, JSON.stringify(logs)); }
+    function loadLogs(){ const s=localStorage.getItem(LOGS_KEY); return s?JSON.parse(s):[]; }
+    function saveDwgs(){ localStorage.setItem(DWG_KEY, JSON.stringify(dwgs)); }
+    function loadDwgs(){ const s = localStorage.getItem(DWG_KEY); return s ? JSON.parse(s) : []; }
+    function saveInspectionTemplates(){ localStorage.setItem(INSPECTION_TEMPLATES_KEY, JSON.stringify(inspectionTemplates)); }
+    function loadInspectionTemplates(){ const s = localStorage.getItem(INSPECTION_TEMPLATES_KEY); return s?JSON.parse(s):null; }
+
+    // ---- Utils
+    function uid(){ return Math.random().toString(36).slice(2,10); }
+    function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+    function fmtDate(s){ return s || ""; }
+    function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.remove("hidden"); setTimeout(()=> t.classList.add("hidden"), 1800); }
+    function fileToDataUrl(file){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(file); }); }
+
+    // ---- Seed
+    function seed(){
+      const today = new Date();
+      const f = (d)=> new Date(today.getFullYear(), today.getMonth(), today.getDate()+d).toISOString().slice(0,10);
+      return [
+        { id: uid(), jobNo:"7D1-1", customer:"大協", customerCode:"DK", projectName:"A物流倉庫", itemName:"梁型枠", qty:5, factory:"本社工場", dueDate:f(2), status:"図面", inspection:"未", shipDate:"", arriveDate:"", shipMethod:"自社2t", deliveryTo:"A物流倉庫", invoiceOk:"", invoiceNo:"", notes:"", autoFlow:"on" },
+        { id: uid(), jobNo:"7D2-3", customer:"DT", customerCode:"DT", projectName:"B再開発", itemName:"柱型枠", qty:2, factory:"第2工場", dueDate:f(1), status:"製作", inspection:"未", shipDate:"", arriveDate:"", shipMethod:"宅配", deliveryTo:"B現場", invoiceOk:"不可", invoiceNo:"", notes:"", autoFlow:"on" },
+        { id: uid(), jobNo:"7D3-2", customer:"中川", customerCode:"NG", projectName:"Cプラント", itemName:"スラブ", qty:10, factory:"協力工場A", dueDate:f(-1), status:"検査", inspection:"OK", shipDate:f(0), arriveDate:"", shipMethod:"自社4t", deliveryTo:"C現場", invoiceOk:"", invoiceNo:"", notes:"", autoFlow:"on" },
+      ];
+    }
+
+    // ---- Filters & options
+    function masterNames(list){ return list.filter(x=>x.active).map(x=>x.name); }
+    function setOptions(sel, arr){ sel.innerHTML = arr.map(v=>`<option value="${v}">${v}</option>`).join(""); }
+    function initFilters(){
+      setOptions(document.getElementById("filterCustomer"), [""].concat(masterNames(masters.customers)));
+      setOptions(document.getElementById("filterFactory"), [""].concat(masterNames(masters.factories)));
+      setOptions(document.getElementById("filterStatus"), [""].concat(masterNames(masters.statuses)));
+      ["filterCustomer","filterFactory","filterStatus","filterQuery"].forEach(id=>{
+        const el=document.getElementById(id); if (el) el.addEventListener("input", renderAll);
+      });
+
+      document.getElementById("invoiceMode").value = settings.invoiceMode;
+      document.getElementById("invoiceSeqStart").value = settings.invoiceSeqStart;
+      document.getElementById("roleSelect").value = settings.role;
+
+      document.getElementById("invoiceMode").addEventListener("change", (e)=>{ settings.invoiceMode=e.target.value; saveSettings(); });
+      document.getElementById("invoiceSeqStart").addEventListener("change", (e)=>{ settings.invoiceSeqStart=e.target.value; saveSettings(); });
+      document.getElementById("roleSelect").addEventListener("change", (e)=>{ settings.role=e.target.value; saveSettings(); renderAll(); });
+
+      document.getElementById("holidayCsv").addEventListener("change", onHolidayCsv);
+      document.getElementById("jobsCsv").addEventListener("change", onJobsCsv);
+      document.getElementById("mastersCsv").addEventListener("change", onMastersCsv);
+      document.getElementById("inspectionTemplatesCsv").addEventListener("change", onInspectionTemplatesCsv);
+      document.getElementById("btnDownloadCsvTemplate").addEventListener("click", downloadCsvTemplate);
+      document.getElementById("btnExportMasters").addEventListener("click", exportMastersCsv);
+      document.getElementById("btnExportInspectionTemplates").addEventListener("click", exportInspectionTemplatesCsv);
+      document.getElementById("btnExportCsv").addEventListener("click", exportCsv);
+      document.getElementById("btnExportJson").addEventListener("click", exportJson);
+      document.getElementById("btnExportInvoice").addEventListener("click", exportInvoiceCsv);
+      document.getElementById("btnClearFilters").addEventListener("click", ()=>{
+        ["filterQuery","filterCustomer","filterFactory","filterStatus"].forEach(id=>{ const el=document.getElementById(id); if (el) el.value=""; });
+        renderAll();
+      });
+      document.getElementById("btnGenPdf").addEventListener("click", ()=>{
+        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PDF Mock</title></head>
+        <body style="font-family:Meiryo, sans-serif; padding:24px;">
+          <h2>請求書（モック）</h2>
+          <p>宛先：〇〇御中</p>
+          <table border="1" cellspacing="0" cellpadding="6">
+            <tr><th>工番</th><th>品名</th><th>台数</th><th>納品書番号</th></tr>
+            ${jobs.slice(0,5).map(j=>`<tr><td>${j.jobNo}</td><td>${j.itemName}</td><td>${j.qty}</td><td>${j.invoiceNo||"-"}</td></tr>`).join("")}
+          </table>
+          <p style="margin-top:24px;">※本番はmPDF/wkhtmltopdfでサーバ生成します。</p>
+        </body></html>`;
+        const frame=document.getElementById("pdfFrame");
+        const blob=new Blob([html],{type:"text/html"}); frame.src=URL.createObjectURL(blob);
+      });
+
+      // --- 図面 検索イベント
+      ["qDwgJob","qDwgCust","qDwgProject","qDwgDeliveryTo","qDwgItem","qDwgNumber","qDwgApprove","qDwgCheck","qDwgDesign","qDwgAuthor","qDwgFile"].forEach(id=>{
+        const el=document.getElementById(id); if (el) el.addEventListener("input", renderDwgs);
+      });
+      document.getElementById("btnDwgClear")?.addEventListener("click", ()=>{
+        ["qDwgJob","qDwgCust","qDwgProject","qDwgDeliveryTo","qDwgItem","qDwgNumber","qDwgApprove","qDwgCheck","qDwgDesign","qDwgAuthor","qDwgFile"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
+        renderDwgs();
+      });
+
+      // --- 図面 登録
+      document.getElementById("btnDwgUpload")?.addEventListener("click", async ()=>{
+        const files = document.getElementById("dwgFiles").files;
+        const job   = document.getElementById("dwgJob").value;
+        const project = (document.getElementById("dwgProject").value||"").trim();
+        const deliveryTo = (document.getElementById("dwgDeliveryTo").value||"").trim();
+        const item  = (document.getElementById("dwgItem").value||"").trim();
+        const number = (document.getElementById("dwgNumber").value||"").trim();
+        const date = (document.getElementById("dwgDate").value||"").trim() || todayStr();
+        const approve = (document.getElementById("dwgApprove").value||"").trim();
+        const check = (document.getElementById("dwgCheck").value||"").trim();
+        const design = (document.getElementById("dwgDesign").value||"").trim();
+        const author = (document.getElementById("dwgAuthor").value||"").trim();
+        if(!files || !files.length) return alert("ファイルを選択してください");
+        if(!job) return alert("工番を選択してください");
+
+        const jobRow = jobs.find(x=>x.jobNo===job);
+        for(const f of files){
+          const url = await fileToDataUrl(f);
+          dwgs.push({
+            id: uid(),
+            jobNo: job,
+            customer: jobRow?.customer || "",
+            projectName: project || jobRow?.projectName || "",
+            deliveryTo: deliveryTo || jobRow?.deliveryTo || "",
+            itemName: item || jobRow?.itemName || "",
+            drawingNumber: number || "",
+            drawingDate: date,
+            approval: approve,
+            check: check,
+            design: design,
+            author: author,
+            fileName: f.name,
+            mime: f.type || "application/octet-stream",
+            dataUrl: url,
+            uploadedBy: settings.role || "demo",
+            uploadedAt: new Date().toISOString()
+          });
+        }
+        saveDwgs();
+        renderDwgs();
+        alert("登録しました（端末ローカル）");
+        document.getElementById("dwgFiles").value="";
+      });
+
+      // --- JSON取込（任意） for jobs
+      document.getElementById("jsonFile")?.addEventListener("change", (e)=>{
+        const f=e.target.files[0]; if(!f) return;
+        const fr=new FileReader();
+        fr.onload=()=>{
+          try{
+            const arr = JSON.parse(fr.result);
+            if(!Array.isArray(arr)) throw new Error("配列のJSONが必要です");
+            jobs = arr;
+            saveJobs();
+            renderAll();
+            alert("JSONを取り込みました");
+          }catch(err){ alert("JSON取込エラー: "+err.message); }
+        };
+        fr.readAsText(f);
+        e.target.value="";
+      });
+    }
+
+    function currentFilters(){
+      return {
+        customer: (document.getElementById("filterCustomer").value||""),
+        factory: (document.getElementById("filterFactory").value||""),
+        status: (document.getElementById("filterStatus").value||""),
+        q: (document.getElementById("filterQuery").value||"").toLowerCase()
+      };
+    }
+
+    function applyFilters(list){
+      const f = currentFilters();
+      return list.filter(r=>{
+        if (f.customer && r.customer !== f.customer) return false;
+        if (f.factory && r.factory !== f.factory) return false;
+        if (f.status && r.status !== f.status) return false;
+        if (f.q){
+          const hay = [r.jobNo, r.projectName, r.itemName].join(" ").toLowerCase();
+          if (!hay.includes(f.q)) return false;
+        }
+        return true;
+      });
+    }
+
+    // ---- Sorting helper
+    function sortJobs(list){
+      if(!sortState.key) return list;
+      const key = sortState.key;
+      return [...list].sort((a,b)=>{
+        let va = a[key] || "";
+        let vb = b[key] || "";
+        // 日付比較
+        if(key === "dueDate" || key==="shipDate" || key==="arriveDate"){
+          va = va || "";
+          vb = vb || "";
+        }
+        if(typeof va === "string") va = va.toLowerCase();
+        if(typeof vb === "string") vb = vb.toLowerCase();
+        if(va < vb) return -1 * sortState.dir;
+        if(va > vb) return 1 * sortState.dir;
+        return 0;
+      });
+    }
+
+    function updateSortIndicators(){
+      document.querySelectorAll("#jobsTable th").forEach(th=>{
+        const key=th.dataset.key;
+        const span=th.querySelector(".sort-indicator");
+        if(!span) return;
+        if(sortState.key===key){
+          span.textContent = sortState.dir===1 ? "▲" : "▼";
+        } else {
+          span.textContent = "";
+        }
+      });
+    }
+
+    // ---- Days
+    function daysUntil(dstr){
+      if (!dstr) return null;
+      const d = new Date(dstr+"T00:00:00");
+      const t = new Date(); t.setHours(0,0,0,0);
+      return Math.round((d-t)/86400000);
+    }
+    function workdaysUntil(dstr){
+      if (!dstr) return null;
+      let d=new Date(); d.setHours(0,0,0,0);
+      const end = new Date(dstr+"T00:00:00");
+      let count=0;
+      while (d<=end){
+        const ymd=d.toISOString().slice(0,10);
+        const isWeekend=(d.getDay()===0||d.getDay()===6);
+        const isHoliday=holidays.has(ymd);
+        if (!isWeekend && !isHoliday) count++;
+        d.setDate(d.getDate()+1);
+      }
+      return count;
+    }
+
+    // ---- Warnings
+    function renderWarnings(){
+      const warnEl=document.getElementById("warnings");
+      const list = jobs.map(j=>({id:j.id, jobNo:j.jobNo, dd:daysUntil(j.dueDate), due:j.dueDate}))
+                       .filter(x=>x.due)
+                       .filter(x=>x.dd<=DUE_SOON_DAYS);
+      if (!list.length){ warnEl.classList.add("hidden"); warnEl.innerHTML=""; return; }
+      const overdue = list.filter(x=>x.dd<0);
+      const soon = list.filter(x=>x.dd>=0);
+      warnEl.classList.remove("hidden");
+      warnEl.innerHTML = `<div><strong>アラート</strong>：期限切れ ${overdue.length} 件 / まもなく期限 ${soon.length} 件（閾値：${DUE_SOON_DAYS}日）</div>
+        <div class="muted" style="margin-top:6px;">${list.map(x=>`<span class="pill" style="margin:2px;">${x.jobNo}（残${x.dd}日）</span>`).join("")}</div>`;
+    }
+
+    // ---- Table
+    function renderTable(){
+      const tbody=document.querySelector("#jobsTable tbody");
+      let filtered = applyFilters(jobs);
+      filtered = sortJobs(filtered);
+      const sorted = filtered;
+      tbody.innerHTML = sorted.map(r=>{
+        const dd=daysUntil(r.dueDate), wd=workdaysUntil(r.dueDate);
+        const cls = dd==null ? "" : (dd<0?"due-bad":(dd<=DUE_SOON_DAYS?"due-soon":""));
+        return `<tr data-id="${r.id}" class="${cls}">
+          <td class="nowrap">
+            ${r.jobNo||""}
+            <button class="ghost btnToDwg" data-job="${r.jobNo||""}" title="図面">📄</button>
+          </td>
+          <td>${r.customer||""}</td>
+          <td>${r.projectName||""}</td>
+          <td>${r.itemName||""}</td>
+          <td class="right">${r.qty||""}</td>
+          <td>${r.factory||""}</td>
+          <td>${fmtDate(r.dueDate)||""}</td>
+          <td><span class="pill status-${r.status}">${r.status||""}</span></td>
+          <td>${r.inspection||""}</td>
+          <td>${fmtDate(r.shipDate)||""}</td>
+          <td>${fmtDate(r.arriveDate)||""}</td>
+          <td>${r.shipMethod||""}</td>
+          <td>${r.deliveryTo||""}</td>
+          <td>${r.invoiceOk||""}</td>
+          <td>${r.invoiceNo||""}</td>
+          <td>${r.notes||""}</td>
+          <td class="right">${dd==null?"":dd}</td>
+          <td class="right">${wd==null?"":wd}</td>
+          <td>${r.autoFlow==="on"?"ON":"OFF"}</td>
+        </tr>`;
+      }).join("");
+      tbody.querySelectorAll("tr").forEach(tr=> tr.addEventListener("click", ()=> openEdit(tr.getAttribute("data-id"))));
+      tbody.querySelectorAll(".btnToDwg").forEach(b=> b.addEventListener("click",(e)=>{
+        e.stopPropagation();
+        const job = e.currentTarget.getAttribute("data-job")||"";
+        switchTab("drawings");
+        const q = document.getElementById("qDwgJob"); if(q){ q.value = job; }
+        renderDwgs();
+      }));
+    }
+
+    // ---- Kanban/Weekly
+    function renderKanban(){
+      const wrap=document.getElementById("kanban"); wrap.innerHTML="";
+      masters.statuses.filter(s=>s.active).map(s=>s.name).forEach(st=>{
+        const col=document.createElement("div"); col.className="col"; col.dataset.status=st;
+        col.innerHTML=`<h3>${st}</h3><div class="dropzone"></div>`;
+        const zone=col.querySelector(".dropzone");
+        applyFilters(jobs).filter(j=>j.status===st).forEach(r=>{
+          const dd=daysUntil(r.dueDate), wd=workdaysUntil(r.dueDate);
+          const ddTxt=dd==null?"未定":(dd+"日"); const wdTxt=wd==null?"-":(wd+"稼働日");
+          const el=document.createElement("div"); el.className="card-k"; el.draggable=true; el.dataset.id=r.id;
+          el.innerHTML=`<div class="title">${r.jobNo} ${r.itemName} <span class="pill status-${r.status}" style="float:right">${r.qty||""}台</span></div>
+            <div class="muted">${r.customer}／${r.factory}</div>
+            <div class="muted">納期: ${fmtDate(r.dueDate)||"未定"}（残${ddTxt}／${wdTxt}）</div>`;
+          el.addEventListener("dragstart", e=> e.dataTransfer.setData("text/plain", r.id));
+          el.addEventListener("dblclick", ()=> openEdit(r.id));
+          zone.appendChild(el);
+        });
+        ["dragover","dragleave","drop"].forEach(ev=>{
+          zone.addEventListener(ev, e=>{
+            e.preventDefault();
+            if (ev==="dragover") col.classList.add("over");
+            if (ev==="dragleave") col.classList.remove("over");
+            if (ev==="drop"){ col.classList.remove("over"); moveStatus(e.dataTransfer.getData("text/plain"), st); }
+          });
+        });
+        wrap.appendChild(col);
+      });
+    }
+    function renderWeekly(){
+      const div=document.getElementById("weekly");
+      const list=applyFilters(jobs).filter(j=>j.dueDate).sort((a,b)=> a.dueDate.localeCompare(b.dueDate));
+      const groups={};
+      list.forEach(j=>{ const k=weekKey(j.dueDate); (groups[k] ||= []).push(j); });
+      div.innerHTML = Object.keys(groups).sort().map(key=>{
+        const arr=groups[key]; const span=spanDays(arr); const label=weekLabel(key);
+        const totalQty=arr.reduce((s,x)=> s+(x.qty||0),0);
+        const byFactory=groupCount(arr,a=>a.factory);
+        return `<div class="week"><div>
+          <strong>${label}</strong>
+          <div class="muted">${arr.length}件／${totalQty}台</div>
+          <div class="muted">${Object.keys(byFactory).map(k=>`${k}:${byFactory[k]}件`).join("　")}</div>
+          </div><div><div class="bar" style="width:${Math.min(100,10+span*8)}%"></div>
+          <div>${arr.map(j=>`<span class="pill status-${j.status}" style="margin:4px 6px 0 0; display:inline-block;">${j.jobNo}:${j.itemName}</span>`).join("")}</div>
+        </div></div>`;
+      }).join("") || '<div class="muted">データなし</div>';
+    }
+    function groupCount(arr, fn){ const m={}; arr.forEach(a=>{ const k=fn(a)||"未設定"; m[k]=(m[k]||0)+1; }); return m; }
+    function spanDays(arr){
+      const xs=arr.map(a=>Date.parse(a.dueDate)).filter(Boolean); if (xs.length<2) return 1;
+      const min=Math.min(...xs), max=Math.max(...xs); return Math.max(1, Math.round((max-min)/86400000)+1);
+    }
+    function weekKey(dstr){ const d=new Date(dstr+"T00:00:00"); const tmp=new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); tmp.setUTCDate(tmp.getUTCDate()+4-(tmp.getUTCDay()||7)); const ys=new Date(Date.UTC(tmp.getUTCFullYear(),0,1)); const wn=Math.ceil((((tmp-ys)/86400000)+1)/7); return tmp.getUTCFullYear()+"-W"+String(wn).padStart(2,"0"); }
+    function weekLabel(key){ const [y,w]=key.split("-W"); return `${y}年 第${parseInt(w)}週`; }
+
+    // ---- Move status with auto-flow
+    function moveStatus(id, newStatus){
+      const idx=jobs.findIndex(j=>j.id===id); if (idx<0) return;
+      const rec=jobs[idx]; const old=rec.status;
+      rec.status=newStatus;
+      if (newStatus==="出荷" && !rec.shipDate) rec.shipDate=todayStr();
+      if (newStatus==="着"){ if (!rec.arriveDate) rec.arriveDate=todayStr(); if (INVOICE_AUTO_ON_ARRIVE && !rec.invoiceOk) rec.invoiceOk="可"; }
+      if (newStatus==="請求"){ rec.invoiceOk="可"; ensureInvoiceNo(rec); }
+      log(`工程移動: ${rec.jobNo} ${old}→${newStatus}`);
+      saveJobs(); renderAll();
+    }
+
+    // ---- Edit dialog
+    function openEdit(id){
+      const dlg=document.getElementById("editDialog");
+      const form=document.getElementById("editForm");
+      const rec = id ? jobs.find(j=>j.id===id) : { id:uid(), status:"図面", qty:1, inspection:"未", autoFlow: settings.autoFlowDefault };
+
+      form.reset(); form.dataset.id=rec.id;
+
+      setOptions(form.elements.customer, masterNames(masters.customers));
+      setOptions(form.elements.factory, masterNames(masters.factories));
+      setOptions(form.elements.status, masterNames(masters.statuses));
+      setOptions(form.elements.inspection, masters.inspections.filter(x=>x.active).map(x=>x.name));
+      setOptions(form.elements.shipMethod, masterNames(masters.shipmentMethods));
+
+      form.elements.jobNo.value = rec.jobNo||"";
+      form.elements.customer.value = rec.customer||"";
+      form.elements.projectName.value = rec.projectName||"";
+      form.elements.itemName.value = rec.itemName||"";
+      form.elements.qty.value = rec.qty||1;
+      form.elements.factory.value = rec.factory||"";
+      form.elements.dueDate.value = rec.dueDate||"";
+      form.elements.status.value = rec.status||"図面";
+      form.elements.inspection.value = rec.inspection||"未";
+      form.elements.shipDate.value = rec.shipDate||"";
+      form.elements.arriveDate.value = rec.arriveDate||"";
+      form.elements.shipMethod.value = rec.shipMethod||"";
+      form.elements.deliveryTo.value = rec.deliveryTo||"";
+      form.elements.invoiceOk.value = rec.invoiceOk||"";
+      form.elements.invoiceNo.value = rec.invoiceNo||"";
+      form.elements.autoFlow.value = rec.autoFlow||"on";
+      form.elements.notes.value = rec.notes||"";
+
+      document.getElementById("dlgTitle").textContent = id ? ("編集：" + rec.jobNo) : "新規登録";
+      dlg.showModal();
+    }
+
+    document.getElementById("editForm").addEventListener("submit", (e)=>{
+      e.preventDefault();
+      const f=e.currentTarget; const id=f.dataset.id || uid();
+      const obj={
+        id,
+        jobNo: f.elements.jobNo.value.trim(),
+        customer: f.elements.customer.value,
+        customerCode: codeByName(masters.customers, f.elements.customer.value),
+        projectName: f.elements.projectName.value.trim(),
+        itemName: f.elements.itemName.value.trim(),
+        qty: parseInt(f.elements.qty.value||"0",10)||0,
+        factory: f.elements.factory.value,
+        dueDate: f.elements.dueDate.value,
+        status: f.elements.status.value,
+        inspection: f.elements.inspection.value,
+        shipDate: f.elements.shipDate.value,
+        arriveDate: f.elements.arriveDate.value,
+        shipMethod: f.elements.shipMethod.value,
+        deliveryTo: f.elements.deliveryTo.value.trim(),
+        invoiceOk: f.elements.invoiceOk.value,
+        invoiceNo: f.elements.invoiceNo.value.trim(),
+        autoFlow: f.elements.autoFlow.value,
+        notes: f.elements.notes.value.trim()
+      };
+      if (!obj.jobNo){ alert("工番は必須です"); return; }
+      applyAutoFlow(obj);
+      const idx=jobs.findIndex(j=>j.id===id);
+      if (idx>=0){ jobs[idx]=obj; log(`更新: ${obj.jobNo}`); } else { jobs.push(obj); log(`新規: ${obj.jobNo}`); }
+      saveJobs(); renderAll(); document.getElementById("editDialog").close();
+    });
+
+    document.getElementById("btnDlgCancel").addEventListener("click", ()=> document.getElementById("editDialog").close());
+    document.getElementById("btnAdd").addEventListener("click", ()=> openEdit(null));
+    document.getElementById("btnSave").addEventListener("click", ()=> { saveJobs(); toast("保存しました（端末ローカル）"); });
+
+    // ---- Auto flow implementation
+    function applyAutoFlow(rec){
+      if (rec.autoFlow!=="on") return;
+      if (rec.inspection==="保留"){ rec.status="検査"; return; }
+      if (rec.arriveDate){ rec.status="着"; if (INVOICE_AUTO_ON_ARRIVE && !rec.invoiceOk) rec.invoiceOk="可"; }
+      else if (rec.shipDate){ rec.status="出荷"; }
+      else if (rec.inspection==="OK"){ rec.status="出荷"; }
+      const n = (rec.notes||"");
+      if (!rec.shipDate && !rec.arriveDate){
+        if (/\[製作完\]/.test(n)) rec.status="検査";
+        else if (/\[切出完\]/.test(n)) rec.status="製作";
+      }
+    }
+
+    // ---- Numbering
+    function ensureInvoiceNo(rec){
+      if (rec.invoiceNo && rec.invoiceNo.trim()!=="") return;
+      if (settings.invoiceMode==="manual") return;
+      const ymd=todayStr(); const yy=ymd.slice(2,4), mm=ymd.slice(5,7);
+      const prefix = (settings.invoiceMode==="by-customer-seq")
+        ? `${(rec.customerCode||"OT")}-${yy}${mm}-`
+        : `${yy}${mm}-`;
+      const next = nextSeq(prefix);
+      rec.invoiceNo = prefix + next;
+    }
+    function nextSeq(prefix){
+      const start = settings.invoiceSeqStart || "0001";
+      const used = jobs.map(j=> j.invoiceNo||"").filter(s=> s.startsWith(prefix)).map(s=> parseInt(s.slice(prefix.length),10)).filter(n=>!isNaN(n));
+      const maxv = used.length ? Math.max(...used) : (parseInt(start,10)-1||0);
+      const n = maxv + 1;
+      return String(n).padStart(4,"0");
+    }
+
+    // ---- CSV/JSON
+    function downloadBlob(blob, filename){
+      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+      setTimeout(()=> URL.revokeObjectURL(a.href), 1000);
+    }
+    function exportCsv(){
+      const cols = ["工番","客先","工事名","品名","台数","製作工場","納期","状況","検査","出荷日","着日","出荷手段","納品先","請求可","納品書番号","備考","自動遷移"];
+      const map = r => [r.jobNo,r.customer,r.projectName,r.itemName,r.qty,r.factory,r.dueDate,r.status,r.inspection,r.shipDate,r.arriveDate,r.shipMethod,r.deliveryTo,r.invoiceOk,r.invoiceNo,r.notes,r.autoFlow];
+      const rows=[cols].concat(applyFilters(jobs).map(map));
+      const csv=rows.map(row=> row.map(x=>{
+        const s=(x==null?"":String(x)); return /[",\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s;
+      }).join(",")).join("\n");
+      downloadBlob(new Blob([csv],{type:"text/csv"}), "jobs.csv");
+    }
+    function exportJson(){ downloadBlob(new Blob([JSON.stringify(jobs,null,2)],{type:"application/json"}),"jobs.json"); }
+    function exportInvoiceCsv(){
+      const targets=jobs.filter(j=> j.status==="請求" || (j.invoiceOk==="可" && j.arriveDate));
+      const cols=["工番","品名","台数","着日","納品先","納品書番号","客先","工事名","検収日","税区分","備考"];
+      const map=r=> [r.jobNo,r.itemName,r.qty,r.arriveDate||"",r.deliveryTo||"",r.invoiceNo||"",r.customer||"",r.projectName||"","", "課税10%",""];
+      const rows=[cols].concat(targets.map(map));
+      const csv=rows.map(row=> row.map(x=>{ const s=(x==null?"":String(x)); return /[",\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; }).join(",")).join("\n");
+      downloadBlob(new Blob([csv],{type:"text/csv"}),"請求草案.csv");
+    }
+
+    // ---- Holiday CSV
+    function normalizeDateToken(s){
+      const m=(s||"").match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/); if(!m) return null;
+      const y=m[1], mo=String(m[2]).padStart(2,'0'), d=String(m[3]).padStart(2,'0'); return `${y}-${mo}-${d}`;
+    }
+    function onHolidayCsv(e){
+      const f=e.target.files[0]; if(!f) return;
+      const fr=new FileReader();
+      fr.onload=()=>{
+        try{
+          const lines=fr.result.split(/\r?\n/).map(s=>s.trim()).filter(Boolean); let added=0;
+          lines.forEach(line=>{
+            const parts=line.split(/[,\t]/); let ymd=null;
+            for(const p of parts){ const t=normalizeDateToken(p); if(t){ ymd=t; break; } }
+            if(!ymd && parts.length===1 && /^\d{4}-\d{2}-\d{2}$/.test(parts[0])) ymd=parts[0];
+            if(ymd){ holidays.add(ymd); added++; }
+          });
+          saveHolidays(); alert(`休日CSVを取り込みました（${holidays.size}日, 追加 ${added}）`); renderAll();
+        }catch(err){ alert("休日CSV取込エラー: "+err.message); }
+      };
+      fr.readAsText(f); e.target.value="";
+    }
+
+    // ---- Masters UI
+    function renderMasters(){
+      const mount = (id, listName)=>{
+        const el=document.getElementById(id); const list=masters[listName];
+        el.innerHTML = list.map((row,i)=>`
+          <div class="row" data-idx="${i}">
+            <input type="checkbox" ${row.active?"checked":""} class="m-active" title="有効/無効" />
+            <input type="text" value="${row.code}" class="m-code" style="width:64px;">
+            <input type="text" value="${row.name}" class="m-name" style="flex:1;">
+            <button class="ghost m-up">↑</button><button class="ghost m-down">↓</button>
+            <button class="ghost m-del">削除</button>
+          </div>`).join("") + `<div style="margin-top:6px;"><button class="ghost m-add">＋ 追加</button></div>`;
+        el.querySelectorAll(".m-active").forEach((ck,idx)=> ck.addEventListener("change", ()=>{ list[idx].active=ck.checked; saveMasters(); renderAll(); }));
+        el.querySelectorAll(".m-code").forEach((ip,idx)=> ip.addEventListener("change", ()=>{ list[idx].code=ip.value.trim(); saveMasters(); }));
+        el.querySelectorAll(".m-name").forEach((ip,idx)=> ip.addEventListener("change", ()=>{ list[idx].name=ip.value.trim(); saveMasters(); renderAll(); }));
+        el.querySelectorAll(".m-up").forEach((bt,idx)=> bt.addEventListener("click", ()=>{ if(idx>0){ const t=list[idx]; list[idx]=list[idx-1]; list[idx-1]=t; saveMasters(); renderMasters(); renderAll(); } }));
+        el.querySelectorAll(".m-down").forEach((bt,idx)=> bt.addEventListener("click", ()=>{ if(idx<list.length-1){ const t=list[idx]; list[idx]=list[idx+1]; list[idx+1]=t; saveMasters(); renderMasters(); renderAll(); } }));
+        el.querySelectorAll(".m-del").forEach((bt,idx)=> bt.addEventListener("click", ()=>{ list.splice(idx,1); saveMasters(); renderMasters(); renderAll(); }));
+        el.querySelector(".m-add").addEventListener("click", ()=>{ list.push({code:"",name:"",active:true}); saveMasters(); renderMasters(); });
+      };
+      mount("master-customers","customers");
+      mount("master-factories","factories");
+      mount("master-ship","shipmentMethods");
+      mount("master-statuses","statuses");
+    }
+
+    function exportMastersCsv(){
+      const rows=[["区分","コード","名称","有効"]];
+      const push=(k)=> masters[k].forEach(x=> rows.push([k, x.code, x.name, x.active?"1":"0"]));
+      ["customers","factories","shipmentMethods","statuses","inspections"].forEach(push);
+      const csv=rows.map(r=> r.map(x=> { const s=(x==null?"":String(x)); return /[",\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; }).join(",")).join("\n");
+      downloadBlob(new Blob([csv],{type:"text/csv"}), "masters.csv");
+    }
+
+    function downloadCsvTemplate(){
+      const cols = ["工番","客先","工事名","品名","台数","製作工場","納期","状況","検査","出荷日","着日","出荷手段","納品先","請求可","納品書番号","備考"];
+      const sample = ["7E1-1","大協","D倉庫","梁型枠","3","本社工場","2025-08-05","図面","未","","","自社2t","D倉庫","","",""];
+      const csv = [cols.join(","), sample.join(",")].join("\n");
+      downloadBlob(new Blob([csv], { type: "text/csv" }), "案件取込テンプレート_v33.csv");
+    }
+
+    function onMastersCsv(e){
+      const f=e.target.files[0]; if(!f) return; const fr=new FileReader();
+      fr.onload=()=>{
+        try{
+          const lines=fr.result.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+          const dest={"customers":[],"factories":[],"shipmentMethods":[],"statuses":[],"inspections":[]};
+          lines.slice(1).forEach(line=>{
+            const row=line.split(",");
+            const key=row[0]; const code=row[1]; const name=row[2]; const active=row[3]==="1";
+            if(dest[key]) dest[key].push({code,name,active});
+          });
+          Object.assign(masters, dest); saveMasters(); renderMasters(); renderAll(); toast("マスターを取り込みました");
+        }catch(err){ alert("マスター取込エラー: "+err.message); }
+      };
+      fr.readAsText(f); e.target.value="";
+    }
+
+    // ---- Inspection templates CSV import/export
+    function onInspectionTemplatesCsv(e){
+      const f=e.target.files[0]; if(!f) return; const fr=new FileReader();
+      fr.onload=()=>{
+        try{
+          const lines=fr.result.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+          lines.forEach(line=>{
+            // フォーマット: テンプレ名,項目1;項目2;項目3
+            const parts=line.split(",");
+            if(parts.length<2) return;
+            const name=parts[0];
+            const criteria=parts[1].split(";").map(s=>s.trim()).filter(Boolean);
+            inspectionTemplates.push({id: uid(), name, criteria});
+          });
+          saveInspectionTemplates();
+          renderInspectionTemplates();
+          toast("検査テンプレート取り込みました");
+        }catch(err){ alert("検査テンプレート取込エラー: "+err.message); }
+      };
+      fr.readAsText(f); e.target.value="";
+    }
+    function exportInspectionTemplatesCsv(){
+      if(!inspectionTemplates.length){ alert("テンプレートがありません"); return; }
+      const rows=inspectionTemplates.map(t=> [t.name, (t.criteria||[]).join(";")]);
+      const csv = rows.map(r=> r.map(x=> {
+        const s=(x==null?"":String(x));
+        return /[",\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s;
+      }).join(",")).join("\n");
+      downloadBlob(new Blob([csv],{type:"text/csv"}), "inspection_templates.csv");
+    }
+    function renderInspectionTemplates(){
+      const div=document.getElementById("inspection-templates-list");
+      if(!div) return;
+      if(!inspectionTemplates.length){
+        div.innerHTML = '<div class="muted">テンプレートなし</div>';
+        return;
+      }
+      div.innerHTML = inspectionTemplates.map(t=>`
+        <div style="border:1px solid var(--line); padding:8px; border-radius:6px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <strong>${t.name}</strong><br>
+            <span class="subtle">項目: ${ (t.criteria||[]).join(" / ") }</span>
+          </div>
+          <div>
+            <button class="ghost btnDelInspection" data-id="${t.id}">削除</button>
+          </div>
+        </div>
+      `).join("");
+      div.querySelectorAll(".btnDelInspection").forEach(b=>{
+        b.addEventListener("click",(e)=>{
+          const id=e.currentTarget.dataset.id;
+          const idx=inspectionTemplates.findIndex(x=>x.id===id);
+          if(idx>=0){
+            inspectionTemplates.splice(idx,1);
+            saveInspectionTemplates();
+            renderInspectionTemplates();
+          }
+        });
+      });
+    }
+
+    // ---- Jobs CSV import
+    function onJobsCsv(e){
+      const f=e.target.files[0]; if(!f) return; const fr=new FileReader();
+      fr.onload=()=>{
+        try{
+          const rows=parseCsv(fr.result); if(!rows.length) throw new Error("CSVにデータがありません");
+          const header=rows[0]; const idx=(name)=> header.indexOf(name);
+          const required=["工番","品名"]; for(const r of required){ if(idx(r)===-1) throw new Error("ヘッダーに「"+r+"」が必要です"); }
+          for(let i=1;i<rows.length;i++){
+            const r=rows[i]; if(!r || r.length===0) continue;
+            const obj={
+              id: uid(),
+              jobNo: r[idx("工番")]||"",
+              customer: (idx("客先")>=0?r[idx("客先")]:"")||"",
+              customerCode: codeByName(masters.customers, (idx("客先")>=0?r[idx("客先")]:"")||""),
+              projectName: (idx("工事名")>=0?r[idx("工事名")]:"")||"",
+              itemName: r[idx("品名")]||"",
+              qty: parseInt((idx("台数")>=0?r[idx("台数")]:"0"),10)||0,
+              factory: (idx("製作工場")>=0?r[idx("製作工場")]:"")||"",
+              dueDate: normalizeDateToken((idx("納期")>=0?r[idx("納期")]:""))||"",
+              status: (idx("状況")>=0?r[idx("状況")]:"")||"図面",
+              inspection: (idx("検査")>=0?r[idx("検査")]:"")||"未",
+              shipDate: normalizeDateToken((idx("出荷日")>=0?r[idx("出荷日")]:""))||"",
+              arriveDate: normalizeDateToken((idx("着日")>=0?r[idx("着日")]:""))||"",
+              shipMethod: (idx("出荷手段")>=0?r[idx("出荷手段")]:"")||"",
+              deliveryTo: (idx("納品先")>=0?r[idx("納品先")]:"")||"",
+              invoiceOk: (idx("請求可")>=0?r[idx("請求可")]:"")||"",
+              invoiceNo: (idx("納品書番号")>=0?r[idx("納品書番号")]:"")||"",
+              notes: (idx("備考")>=0?r[idx("備考")]:"")||"",
+              autoFlow: "on"
+            };
+            if (obj.arriveDate && !obj.invoiceOk) obj.invoiceOk="可";
+            jobs.push(obj);
+          }
+          saveJobs(); renderAll(); alert((rows.length-1)+"件 取り込みました");
+        }catch(err){ alert("案件CSV取込エラー: "+err.message); }
+      };
+      fr.readAsText(f); e.target.value="";
+    }
+    function parseCsv(text){
+      const lines=text.split(/\r?\n/); let rows=[]; let cur=[], inq=false, field="";
+      function pushField(){ cur.push(field); field=""; }
+      function pushRow(){ rows.push(cur); cur=[]; }
+      for(let i=0;i<lines.length;i++){
+        const line=lines[i];
+        for(let j=0;j<line.length;j++){
+          const c=line[j];
+          if(inq){
+            if(c=='"' && j+1<line.length && line[j+1]=='"'){ field+='"'; j++; }
+            else if(c=='"'){ inq=false; }
+            else field+=c;
+          } else {
+            if(c=='"'){ inq=true; }
+            else if(c==','){ pushField(); }
+            else field+=c;
+          }
+        }
+        pushField(); pushRow();
+      }
+      rows=rows.filter(r=> r.some(x=> (x||"").trim()!=="")); return rows;
+    }
+
+    // ---- Laser ZIP mock
+    document.getElementById("laserZip").addEventListener("change", (e)=>{
+      const f=e.target.files[0]; if(!f) return;
+      let progress=0;
+      const timer=setInterval(()=>{
+        progress+=10;
+        toast(`レーザーZip解析中… ${progress}%`);
+        if(progress>=100){ clearInterval(timer); toast("レーザー取込完了（モック）"); }
+      }, 200);
+      e.target.value="";
+    });
+
+    // ---- Masters helper
+    function codeByName(list, name){ const x=list.find(a=>a.name===name); return x?x.code:"OT"; }
+
+    // ---- Logs
+    function log(msg){ logs.push({ts:new Date().toISOString(), role: settings.role, msg}); saveLogs(); renderLogs(); }
+    function renderLogs(){
+      const div=document.getElementById("logs");
+      div.innerHTML = logs.slice(-200).map(l=> `<div class="subtle">${l.ts} [${l.role}] ${l.msg}</div>`).join("") || '<div class="muted">ログなし</div>';
+    }
+
+    // ---- 図面（一覧 & 操作） filters
+    function fillDwgJobSelect(){
+      const sel = document.getElementById("dwgJob");
+      if(!sel) return;
+      const opts = ['<option value="">工番選択</option>'].concat(
+        [...new Set(jobs.map(j=>j.jobNo))].map(jno=> `<option value="${jno}">${jno}</option>`)
+      );
+      sel.innerHTML = opts.join("");
+    }
+
+    function renderDwgs(){
+      const qJob =(document.getElementById("qDwgJob") ?.value||"").toLowerCase();
+      const qCus =(document.getElementById("qDwgCust")?.value||"").toLowerCase();
+      const qProject =(document.getElementById("qDwgProject")?.value||"").toLowerCase();
+      const qDelivery =(document.getElementById("qDwgDeliveryTo")?.value||"").toLowerCase();
+      const qItem=(document.getElementById("qDwgItem")?.value||"").toLowerCase();
+      const qNumber=(document.getElementById("qDwgNumber")?.value||"").toLowerCase();
+      const qApprove=(document.getElementById("qDwgApprove")?.value||"").toLowerCase();
+      const qCheck=(document.getElementById("qDwgCheck")?.value||"").toLowerCase();
+      const qDesign=(document.getElementById("qDwgDesign")?.value||"").toLowerCase();
+      const qAuthor=(document.getElementById("qDwgAuthor")?.value||"").toLowerCase();
+      const qFile=(document.getElementById("qDwgFile")?.value||"").toLowerCase();
+
+      const tb = document.querySelector("#dwgTable tbody");
+      if(!tb) return;
+
+      const list = dwgs.filter(x=>
+        (!qJob  || (x.jobNo    ||"").toLowerCase().includes(qJob )) &&
+        (!qCus  || (x.customer ||"").toLowerCase().includes(qCus )) &&
+        (!qProject || (x.projectName||"").toLowerCase().includes(qProject)) &&
+        (!qDelivery || (x.deliveryTo||"").toLowerCase().includes(qDelivery)) &&
+        (!qItem || (x.itemName ||"").toLowerCase().includes(qItem)) &&
+        (!qNumber || (x.drawingNumber ||"").toLowerCase().includes(qNumber)) &&
+        (!qApprove || (x.approval||"").toLowerCase().includes(qApprove)) &&
+        (!qCheck || (x.check||"").toLowerCase().includes(qCheck)) &&
+        (!qDesign || (x.design||"").toLowerCase().includes(qDesign)) &&
+        (!qAuthor || (x.author||"").toLowerCase().includes(qAuthor)) &&
+        (!qFile || (x.fileName ||"").toLowerCase().includes(qFile))
+      );
+
+      tb.innerHTML = list.map(x=>`
+        <tr>
+          <td>${thumbHtml(x)}</td>
+          <td>${x.deliveryTo||""}</td>
+          <td>${x.projectName||""}</td>
+          <td>${x.jobNo||""}</td>
+          <td>${x.drawingNumber||""}</td>
+          <td>${fmtDate(x.drawingDate)||""}</td>
+          <td>${x.approval||""}</td>
+          <td>${x.check||""}</td>
+          <td>${x.design||""}</td>
+          <td>${x.author||""}</td>
+          <td>${x.fileName||""}</td>
+          <td>${fmtDateTime(x.uploadedAt)} / ${x.uploadedBy||""}</td>
+          <td>
+            <button class="ghost btnDwgView" data-id="${x.id}">プレビュー</button>
+            <button class="ghost btnDwgDel"  data-id="${x.id}">削除</button>
+          </td>
+        </tr>
+      `).join("") || '<tr><td colspan="13" class="muted">データなし</td></tr>';
+
+      tb.querySelectorAll(".btnDwgDel").forEach(b=> b.addEventListener("click",(e)=>{
+        const id=e.currentTarget.getAttribute("data-id");
+        const i=dwgs.findIndex(d=>d.id===id);
+        if(i>=0 && confirm("削除しますか？")){ dwgs.splice(i,1); saveDwgs(); renderDwgs(); }
+      }));
+      tb.querySelectorAll(".btnDwgView").forEach(b=> b.addEventListener("click",(e)=>{
+        const id=e.currentTarget.getAttribute("data-id");
+        const row=dwgs.find(d=>d.id===id);
+        if(!row) return;
+        const w = window.open();
+        w.document.write(`<html><head><meta charset="UTF-8"><title>${row.fileName}</title></head>
+          <body style="margin:0;"><embed src="${row.dataUrl}" type="${row.mime}" width="100%" height="100%"></body></html>`);
+        w.document.close();
+      }));
+    }
+    function thumbHtml(x){
+      if((x.mime||"").includes("image/")){
+        return `<img src="${x.dataUrl}" alt="" style="width:90px;height:70px;object-fit:cover;border:1px solid #cbd5e1;border-radius:6px;">`;
+      }
+      return `<div style="width:90px;height:70px;border:1px solid #cbd5e1;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#e2e8f0;font-size:12px;">PDF</div>`;
+    }
+    function fmtDateTime(s){
+      try{
+        const d=new Date(s); const p=n=>String(n).padStart(2,"0");
+        return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+      }catch{ return s||""; }
+    }
+
+    // ---- Tabs
+    function switchTab(tab){
+      document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.tab===tab));
+      document.getElementById("view-list").classList.toggle("hidden", tab!=="list");
+      document.getElementById("view-kanban").classList.toggle("hidden", tab!=="kanban");
+      document.getElementById("view-weekly").classList.toggle("hidden", tab!=="weekly");
+      document.getElementById("view-drawings").classList.toggle("hidden", tab!=="drawings");
+      document.getElementById("view-masters").classList.toggle("hidden", tab!=="masters");
+      document.getElementById("view-logs").classList.toggle("hidden", tab!=="logs");
+      document.getElementById("view-docs").classList.toggle("hidden", tab!=="docs");
+    }
+    document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", ()=>{ switchTab(t.dataset.tab); renderAll(); }));
+
+    // ---- Master integrity
+    function defaultMasters(){
+      return {
+        customers: [
+          {code:"DK", name:"大協", active:true},
+          {code:"DT", name:"DT", active:true},
+          {code:"NG", name:"中川", active:true},
+          {code:"OT", name:"その他", active:true},
+        ],
+        factories: [
+          {code:"H1", name:"本社工場", active:true},
+          {code:"H2", name:"第2工場", active:true},
+          {code:"PA", name:"協力工場A", active:true},
+        ],
+        shipmentMethods: [
+          {code:"T2", name:"自社2t", active:true},
+          {code:"T4", name:"自社4t", active:true},
+          {code:"10U", name:"10tユニック", active:true},
+          {code:"4U", name:"4tユニック", active:true},
+          {code:"10", name:"10t", active:true},
+          {code:"TR", name:"トレーラー", active:true},
+          {code:"YO", name:"庸車", active:true},
+          {code:"DL", name:"宅配", active:true},
+          {code:"PU", name:"引取", active:true},
+        ],
+        statuses: [
+          {code:"D", name:"図面", active:true},
+          {code:"M", name:"製作", active:true},
+          {code:"I", name:"検査", active:true},
+          {code:"S", name:"出荷", active:true},
+          {code:"A", name:"着", active:true},
+          {code:"B", name:"請求", active:true},
+        ],
+        inspections: [
+          {code:"N", name:"未", active:true},
+          {code:"O", name:"OK", active:true},
+          {code:"H", name:"保留", active:true},
+        ]
+      };
+    }
+    function ensureMastersIntegrity(){
+      const d = defaultMasters();
+      ["customers","factories","shipmentMethods","statuses","inspections"].forEach(k=>{
+        if(!masters[k] || !Array.isArray(masters[k]) || masters[k].length===0){
+          masters[k] = d[k];
+        }else{
+          masters[k].forEach(x=> { if(typeof x.active==="undefined") x.active=true; });
+        }
+      });
+      saveMasters();
+    }
+
+    function renderAll(){
+      ensureMastersIntegrity();
+      renderWarnings();
+      renderTable();
+      renderKanban();
+      renderWeekly();
+      renderMasters();
+      renderLogs();
+      renderInspectionTemplates();
+      fillDwgJobSelect();
+      if (!document.getElementById("view-drawings").classList.contains("hidden")) renderDwgs();
+      updateSortIndicators();
+      bindHeaderSorting();
+    }
+
+    // ヘッダークリックによるソートバインド（1回だけ）
+    let headerSortBound=false;
+    function bindHeaderSorting(){
+      if(headerSortBound) return;
+      headerSortBound=true;
+      document.querySelectorAll("#jobsTable th[data-key]").forEach(th=>{
+        th.addEventListener("click", ()=>{
+          const key=th.dataset.key;
+          if(sortState.key===key){
+            sortState.dir *= -1;
+          } else {
+            sortState.key=key; sortState.dir=1;
+          }
+          renderAll();
+        });
+      });
+    }
+
+    // ---- init
+    initFilters();
+    renderAll();
+  </script>
+</body>
+</html>
